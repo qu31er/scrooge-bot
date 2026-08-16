@@ -1,20 +1,18 @@
-# Scrooge Garant Bot
+Scrooge Garant Bot
 
-**Оригинальный репозиторий:** https://github.com/qu31er/Scrooge-bot
-**Telegram канал:** https://t.me/killer2017official
-**Автор:** @killer2017official
-**Версия:** 1.0.0
+Оригинальный репозиторий: https://github.com/qu31er/Scrooge-bot
+Telegram канал: https://t.me/killer2017official
+Автор: @killer2017official
+<b>Версия</b>: 1.0.0
 **Статус:** ✅ Активен
 
----
 
-## 📋 Описание
+📋 Описание
 
 Бот для безопасных сделок с криптовалютой через Telegram Crypto Bot. Позволяет пользователям совершать гарантированные сделки с USDT, пополнять баланс, выводить средства, оставлять отзывы и получать поддержку. Администраторы могут управлять пользователями, настраивать комиссию, делать рассылки и просматривать статистику.
 
----
 
-## ✨ Возможности
+ ✨ Возможности
 
 🔐 Безопасные сделки между пользователями с гарантом
 💰 Прием платежей через Crypto Bot (USDT)
@@ -27,9 +25,8 @@
 📊 Статистика пользователей и транзакций
 🎁 Донаты и топ донатеров
 
----
 
-## 🛠 Технологии
+🛠 Технологии
 
 Python 3.10+
 pyTelegramBotAPI
@@ -38,9 +35,8 @@ SQLite3
 Crypto Bot API
 Railway (хостинг)
 
----
 
-## 📦 Установка
+📦 Установка
 
 Клонирование репозитория:
 git clone https://github.com/qu31er/Scrooge-bot.git
@@ -60,9 +56,8 @@ python init_db.py
 Запуск бота:
 python main.py
 
----
 
-## ⚙️ Переменные окружения
+ ⚙️ Переменные окружения
 
 Обязательные:
 BOT_TOKEN=7929405594:AAHNS9y-6jVunV_Bb7D-9qN7E-6JjVunV_Bb7D
@@ -75,37 +70,17 @@ CHANNEL=@your_channel
 HELP_TEXT=Бот для безопасных сделок с криптовалютой
 WEBHOOK_URL=https://ваш-проект.railway.app
 
----
 
-## 🚀 Деплой на Railway
+🚀 Деплой на Railway
 
 1. Создайте репозиторий на GitHub и загрузите проект
 2. На Railway выберите "Deploy from GitHub repo"
 3. Добавьте переменные окружения
 4. Нажмите Deploy
 
----
 
-## 📁 Структура проекта
 
-Scrooge-bot/
-├── main.py              # Точка входа
-├── config.py            # Конфигурация
-├── database.py          # Работа с БД
-├── crypto.py            # Интеграция с Crypto Bot
-├── handlers.py          # Обработчики команд
-├── functions.py         # Вспомогательные функции
-├── menu.py              # Клавиатуры
-├── init_db.py           # Инициализация БД
-├── requirements.txt     # Зависимости
-├── Procfile             # Запуск на Railway
-├── railway.json         # Настройки Railway
-├── .gitignore           # Игнорируемые файлы
-└── README.md            # Документация
-
----
-
-## 📱 Команды
+📱 Команды
 
 /start - Запуск бота и главное меню
 /admin - Панель администратора
