@@ -491,7 +491,7 @@ def register_all_handlers(bot):
             bot.send_message(chat_id, "❌ Введите число (например: 0.1)")
     
     # ============================================================
-    # 4. СДЕЛКА
+    # 4. СДЕЛКА (исправлена синтаксическая ошибка)
     # ============================================================
     
     def create_deal(message, seller_id):
@@ -522,8 +522,8 @@ def register_all_handlers(bot):
             seller_keyboard = types.InlineKeyboardMarkup(row_width=2)
             seller_keyboard.add(
                 types.InlineKeyboardButton('✅ Подтвердить получение', callback_data=f'confirm_sale_{sale_id}'),
-                types.InlineKeyboardButton('⚖️ Спор', callback_data=f'dispute_{sale_id}'
-)
+                types.InlineKeyboardButton('⚖️ Спор', callback_data=f'dispute_{sale_id}')
+            )
             
             bot.send_message(
                 seller_id,
