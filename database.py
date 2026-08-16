@@ -33,7 +33,7 @@ class Database:
                 );
 
                 CREATE TABLE IF NOT EXISTS sale (
-                    id INTEGER PRIMARY KEY,
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id TEXT,
                     name TEXT,
                     user_id2 TEXT,
@@ -44,7 +44,7 @@ class Database:
                 );
 
                 CREATE TABLE IF NOT EXISTS dispute (
-                    id INTEGER PRIMARY KEY,
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id TEXT,
                     name TEXT,
                     user_id2 TEXT,
@@ -92,14 +92,6 @@ class Database:
                     INSERT INTO settings (id, channal, commission, help)
                     VALUES (1, ?, ?, ?)
                 ''', ('@channel', 5, 'Бот для безопасных сделок'))
-            
-            # Счетчик сделок
-            counter = cursor.execute('SELECT * FROM sale WHERE id = 0').fetchone()
-            if not counter:
-                cursor.execute('''
-                    INSERT INTO sale (id, user_id, name, user_id2, name2, sum, status)
-                    VALUES (0, '0', 'system', '0', 'system', 0, 'system')
-                ''')
             
             # Дефолтный пост
             post = cursor.execute('SELECT * FROM post').fetchone()
@@ -166,7 +158,6 @@ class Database:
             return None
     
     def update_balance(self, user_id: int, amount: int) -> bool:
-        """Прибавляет или отнимает от баланса"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -177,7 +168,6 @@ class Database:
             return cursor.rowcount > 0
     
     def set_balance(self, user_id: int, amount: int) -> bool:
-        """Устанавливает баланс (заменяет)"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -203,16 +193,17 @@ class Database:
                 'sell_sum': row[7]
             } for row in rows]
     
-    # ============ СДЕЛКИ ============
+    # ============ СДЕЛКИ (ИСПРАВЛЕННЫЕ) ============
     
     def create_sale(self, user_id: int, name: str, user_id2: int, name2: str, amount: int) -> int:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             
-            # Получаем новый ID
-            counter = cursor.execute('SELECT id FROM sale WHERE user_id = "0"').fetchone()
-            new_id = counter[0] + 1
-            cursor.execute('UPDATE sale SET id = ? WHERE user_id = "0"', (new_id,))
+            # Получаем максимальный ID
+            cursor.execute('SELECT MAX(id) FROM sale')
+            result = cursor.fetchone()
+            max_id = result[0] if result[0] is not None else 0
+            new_id = max_id + 1
             
             cursor.execute('''
                 INSERT INTO sale (id, user_id, name, user_id2, name2, sum, status)
@@ -233,7 +224,7 @@ class Database:
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM sale WHERE id = ?', (sale_id,))
             row = cursor.fetchone()
-            if row and row[0] != 0:
+            if row:
                 return {
                     'id': row[0],
                     'user_id': row[1],
@@ -250,7 +241,7 @@ class Database:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                'SELECT * FROM sale WHERE (user_id = ? OR user_id2 = ?) AND id != 0 AND status != "completed"',
+                'SELECT * FROM sale WHERE (user_id = ? OR user_id2 = ?) AND status != "completed"',
                 (str(user_id), str(user_id))
             )
             rows = cursor.fetchall()
@@ -276,13 +267,11 @@ class Database:
             commission_amount = int(sale['sum'] * commission / 100)
             seller_amount = sale['sum'] - commission_amount
             
-            # Переводим деньги продавцу (с учетом комиссии)
             cursor.execute(
                 'UPDATE users SET balance = balance + ? WHERE user_id = ?',
                 (seller_amount, sale['user_id2'])
             )
             
-            # Обновляем статистику
             cursor.execute(
                 'UPDATE users SET buy = buy + 1, buy_sum = buy_sum + ? WHERE user_id = ?',
                 (sale['sum'], sale['user_id'])
@@ -306,7 +295,6 @@ class Database:
             if not sale:
                 return False
             
-            # Возвращаем деньги покупателю
             cursor.execute(
                 'UPDATE users SET balance = balance + ? WHERE user_id = ?',
                 (sale['sum'], sale['user_id'])
