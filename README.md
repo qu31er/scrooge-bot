@@ -1,10 +1,14 @@
 Scrooge Garant Bot
 
-Оригинальный репозиторий: https://github.com/qu31er/Scrooge-bot
-Telegram канал: https://t.me/killer2017official
-Автор: @killer2017official
-<b>Версия</b>: 1.0.0
-**Статус:** ✅ Активен
+<b>Оригинальный репозиторий:</b>https://github.com/qu31er/Scrooge-bot
+
+<b>Telegram канал:</b>https://t.me/killer2017official
+
+<b>Автор:</b>@killer2017official
+
+<b>Версия:</b> 1.0.0
+
+<b>Статус:</b> Активен
 
 
 📋 Описание
@@ -106,9 +110,8 @@ WEBHOOK_URL=https://ваш-проект.railway.app
 📰 Автопостинг - Настройка поста
 🔙 Назад - Выход из админ-панели
 
----
 
-## 📄 Лицензия
+📄 Лицензия
 
 MIT License
 
@@ -118,9 +121,8 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
----
 
-## 🤝 Вклад в проект
+🤝 Вклад в проект
 
 1. Форкните репозиторий
 2. Создайте ветку (git checkout -b feature/AmazingFeature)
@@ -128,8 +130,8 @@ The above copyright notice and this permission notice shall be included in all c
 4. Запушьте (git push origin feature/AmazingFeature)
 5. Откройте Pull Request
 
----
 
-## ⭐️ Поддержка
+
+⭐️ Поддержка
 
 Если проект вам полезен, поставьте звезду ⭐️ на GitHub и подпишитесь на Telegram канал: https://t.me/killer2017official
