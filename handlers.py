@@ -9,6 +9,38 @@ from crypto import CryptoBot
 db = Database()
 crypto = CryptoBot()
 
+# ============================================================
+# ФУНКЦИЯ ДЛЯ ОТПРАВКИ ЧЕКА ЧЕРЕЗ @send
+# ============================================================
+
+def send_check(chat_id, amount, comment=""):
+    """Отправка чека через @send бота"""
+    try:
+        keyboard = types.InlineKeyboardMarkup(row_width=1)
+        keyboard.add(
+            types.InlineKeyboardButton(
+                text="💰 Создать чек",
+                url=f"https://t.me/send?start={amount}_USDT"
+            )
+        )
+        
+        bot.send_message(
+            chat_id,
+            f"🧾 <b>Чек на {amount} USDT</b>\n\n"
+            f"{comment}\n\n"
+            f"Нажмите кнопку ниже для создания чека:",
+            parse_mode="HTML",
+            reply_markup=keyboard
+        )
+        return True
+    except Exception as e:
+        print(f"Ошибка отправки чека: {e}")
+        return False
+
+# ============================================================
+# РЕГИСТРАЦИЯ ОБРАБОТЧИКОВ
+# ============================================================
+
 def register_all_handlers(bot):
     
     @bot.message_handler(commands=['start'])
@@ -82,7 +114,7 @@ def register_all_handlers(bot):
             
             elif text == '💳 Комиссия':
                 settings = db.get_settings()
-                msg = bot.send_message(chat_id, f"💳 Текущая комиссия: {settings['commission']}%\nВведите новую (0-50):", reply_markup=menu.back)
+                msg = bot.send_message(chat_id, f"💳 Текущая комиссия вывода: {settings['commission']}%\nВведите новую (0-50):", reply_markup=menu.back)
                 bot.register_next_step_handler(msg, change_commission)
                 return
             
@@ -140,7 +172,7 @@ def register_all_handlers(bot):
             bot.register_next_step_handler(msg, process_withdraw_step1)
         
         elif data == 'donate':
-            msg = bot.send_message(chat_id, "🎁 Введите сумму доната (мин 1 USDT):", reply_markup=menu.back)
+            msg = bot.send_message(chat_id, "🎁 Введите сумму доната (мин 0.1 USDT):", reply_markup=menu.back)
             bot.register_next_step_handler(msg, process_donate)
         
         elif data == 'top_donate':
@@ -158,9 +190,9 @@ def register_all_handlers(bot):
             user_id = data.split('_')[1]
             show_feedback(chat_id, user_id)
         
-        elif data.startswith('sale_end_'):
+        elif data.startswith('confirm_sale_'):
             sale_id = int(data.split('_')[2])
-            complete_sale(chat_id, sale_id)
+            confirm_sale(chat_id, sale_id)
         
         elif data.startswith('sale_back_'):
             sale_id = int(data.split('_')[2])
@@ -219,17 +251,18 @@ def register_all_handlers(bot):
 От: @{sale['name']}
 Для: @{sale['name2']}
 Сумма: {sale['sum']} USDT
+Статус: {sale['status']}
             """
             keyboard = types.InlineKeyboardMarkup(row_width=2)
             
             if str(chat_id) == sale['user_id']:
                 keyboard.add(
-                    types.InlineKeyboardButton('✅ Завершить', callback_data=f'sale_end_{sale["id"]}'),
+                    types.InlineKeyboardButton('❌ Отменить', callback_data=f'sale_back_{sale["id"]}'),
                     types.InlineKeyboardButton('⚖️ Спор', callback_data=f'dispute_{sale["id"]}')
                 )
             elif str(chat_id) == sale['user_id2']:
                 keyboard.add(
-                    types.InlineKeyboardButton('❌ Отменить', callback_data=f'sale_back_{sale["id"]}'),
+                    types.InlineKeyboardButton('✅ Подтвердить', callback_data=f'confirm_sale_{sale["id"]}'),
                     types.InlineKeyboardButton('⚖️ Спор', callback_data=f'dispute_{sale["id"]}')
                 )
             
@@ -254,12 +287,12 @@ def register_all_handlers(bot):
             types.InlineKeyboardButton('⭐️ Отзывы', callback_data=f'feed_{user["user_id"]}')
         )
         bot.send_message(chat_id, text, parse_mode="HTML", reply_markup=keyboard)
-
+    
     # ============================================================
-    # 3. ИСПРАВЛЕННАЯ ФУНКЦИЯ СОЗДАНИЯ СДЕЛКИ
+    # 1. ПОПОЛНЕНИЕ
     # ============================================================
     
-    def create_deal(message, seller_id):
+    def process_deposit(message):
         chat_id = message.chat.id
         if message.text == '❌ Отмена':
             bot.send_message(chat_id, "❌ Отменено", reply_markup=menu.main_menu)
@@ -271,24 +304,9 @@ def register_all_handlers(bot):
                 bot.send_message(chat_id, "❌ Минимальная сумма 1 USDT")
                 return
             
-            user = db.get_user(chat_id)
-            seller = db.get_user(seller_id)
-            
-            if not user or not seller:
-                bot.send_message(chat_id, "❌ Ошибка: пользователь не найден")
-                return
-            
-            if user['balance'] < amount:
-                bot.send_message(chat_id, "❌ Недостаточно средств на балансе")
-                return
-            
-            # Создаем сделку
-            sale_id = db.create_sale(chat_id, user['name'], seller_id, seller['name'], amount)
-            
-            # Создаем инвойс в Crypto Bot
-            invoice = crypto.create_invoice(amount, 'USDT', f'Сделка #{sale_id}')
+            invoice = crypto.create_invoice(amount, 'USDT', f'Пополнение баланса')
             if invoice:
-                db.add_invoice(invoice['invoice_id'], chat_id, amount, 'USDT', sale_id, 'deal')
+                db.add_invoice(invoice['invoice_id'], chat_id, amount, 'USDT', 0, 'deposit')
                 
                 keyboard = types.InlineKeyboardMarkup(row_width=1)
                 keyboard.add(
@@ -298,24 +316,33 @@ def register_all_handlers(bot):
                 
                 bot.send_message(
                     chat_id,
-                    f"💳 Оплатите {amount} USDT через @CryptoBot",
+                    f"💳 Пополните баланс на {amount} USDT",
                     reply_markup=keyboard
                 )
-                bot.send_message(
-                    seller_id,
-                    f"🆕 <b>Новая сделка!</b>\n\nНомер: #{sale_id}\nПокупатель: @{user['name']}\nСумма: {amount} USDT",
-                    parse_mode="HTML"
-                )
-            else:
-                bot.send_message(chat_id, "❌ Ошибка создания счета")
-                
-        except ValueError:
+        except:
             bot.send_message(chat_id, "❌ Введите число")
-        except Exception as e:
-            bot.send_message(chat_id, f"❌ Ошибка: {str(e)}")
+    
+    def check_payment(chat_id, invoice_id):
+        invoice = crypto.check_invoice(invoice_id)
+        if not invoice:
+            bot.send_message(chat_id, "❌ Счет не найден")
+            return
+        
+        if invoice['status'] == 'paid':
+            db.update_invoice_status(invoice_id, 'paid')
+            inv_data = db.get_invoice(invoice_id)
+            
+            if inv_data and inv_data['type'] == 'deposit':
+                db.update_balance(inv_data['user_id'], inv_data['amount'])
+                bot.send_message(
+                    chat_id,
+                    f"✅ Баланс пополнен на {inv_data['amount']} USDT"
+                )
+        else:
+            bot.send_message(chat_id, f"⏳ Статус: {invoice['status']}")
     
     # ============================================================
-    # ОСТАЛЬНЫЕ ФУНКЦИИ
+    # 2. ВЫВОД (с комиссией и чеком для админов)
     # ============================================================
     
     def process_withdraw_step1(message):
@@ -354,7 +381,27 @@ def register_all_handlers(bot):
         
         user = db.get_user(chat_id)
         
+        # Расчет комиссии вывода
+        settings = db.get_settings()
+        commission = settings['commission']
+        commission_amount = int(amount * commission / 100)
+        final_amount = amount - commission_amount
+        
+        # Списываем полную сумму с баланса
+        db.update_balance(chat_id, -amount)
+        
+        # Отправляем запрос админам с чеком
         for admin in config.ADMIN_IDS:
+            send_check(
+                admin,
+                final_amount,
+                f"Вывод для @{user['name']}\n"
+                f"Запрошено: {amount} USDT\n"
+                f"Комиссия ({commission}%): {commission_amount} USDT\n"
+                f"Получит: {final_amount} USDT\n"
+                f"Кошелек: {wallet}"
+            )
+            
             keyboard = types.InlineKeyboardMarkup(row_width=2)
             keyboard.add(
                 types.InlineKeyboardButton('✅ Вывести', callback_data=f'withdraw_accept_{chat_id}_{amount}'),
@@ -366,20 +413,88 @@ def register_all_handlers(bot):
                 f"💸 <b>Запрос на вывод</b>\n\n"
                 f"👤 Пользователь: @{user['name']}\n"
                 f"🆔 ID: {chat_id}\n"
-                f"💰 Сумма: {amount} USDT\n"
+                f"💰 Запрошено: {amount} USDT\n"
+                f"💳 Комиссия ({commission}%): {commission_amount} USDT\n"
+                f"✅ Получит: {final_amount} USDT\n"
                 f"📤 Кошелек: {wallet}",
                 parse_mode="HTML",
                 reply_markup=keyboard
             )
         
-        db.update_balance(chat_id, -amount)
-        
         bot.send_message(
             chat_id,
-            f"📤 Заявка на вывод {amount} USDT отправлена администраторам!\n📤 Кошелек: {wallet}"
+            f"📤 Заявка на вывод {amount} USDT отправлена администраторам!\n"
+            f"📤 Кошелек: {wallet}\n"
+            f"💳 Комиссия: {commission_amount} USDT ({commission}%)\n"
+            f"✅ Вы получите: {final_amount} USDT"
         )
     
-    def process_deposit(message):
+    def admin_withdraw_accept(chat_id, user_id, amount):
+        bot.send_message(
+            user_id,
+            f"✅ Ваш вывод {amount} USDT подтвержден администратором!\n"
+            f"Средства будут отправлены на указанный кошелек."
+        )
+        bot.send_message(chat_id, f"✅ Вывод {amount} USDT для пользователя {user_id} подтвержден")
+    
+    def admin_withdraw_reject(chat_id, user_id):
+        # Возвращаем деньги
+        bot.send_message(
+            user_id,
+            f"❌ Ваш запрос на вывод отклонен администратором.\n"
+            f"Средства возвращены на баланс."
+        )
+        bot.send_message(chat_id, f"❌ Вывод для пользователя {user_id} отклонен")
+    
+    # ============================================================
+    # 3. ДОНАТ (мин 0.1 USDT)
+    # ============================================================
+    
+    def process_donate(message):
+        chat_id = message.chat.id
+        if message.text == '❌ Отмена':
+            bot.send_message(chat_id, "❌ Отменено", reply_markup=menu.main_menu)
+            return
+        
+        try:
+            amount = float(message.text.replace(',', '.'))
+            if amount < 0.1:
+                bot.send_message(chat_id, "❌ Минимальная сумма 0.1 USDT")
+                return
+            
+            user = db.get_user(chat_id)
+            if not user or user['balance'] < amount:
+                bot.send_message(chat_id, "❌ Недостаточно средств на балансе")
+                return
+            
+            amount = round(amount, 2)
+            
+            db.update_balance(chat_id, -amount)
+            db.add_donate(chat_id, amount)
+            
+            bot.send_message(
+                chat_id,
+                f"🎁 Спасибо за донат {amount} USDT!\n"
+                f"💰 Новый баланс: {user['balance'] - amount} USDT",
+                reply_markup=menu.main_menu
+            )
+            
+            for admin in config.ADMIN_IDS:
+                bot.send_message(
+                    admin,
+                    f"🎁 <b>Новый донат!</b>\n\n"
+                    f"👤 Пользователь: @{user['name']}\n"
+                    f"💰 Сумма: {amount} USDT",
+                    parse_mode="HTML"
+                )
+        except ValueError:
+            bot.send_message(chat_id, "❌ Введите число (например: 0.1)")
+    
+    # ============================================================
+    # 4. СДЕЛКА
+    # ============================================================
+    
+    def create_deal(message, seller_id):
         chat_id = message.chat.id
         if message.text == '❌ Отмена':
             bot.send_message(chat_id, "❌ Отменено", reply_markup=menu.main_menu)
@@ -391,29 +506,153 @@ def register_all_handlers(bot):
                 bot.send_message(chat_id, "❌ Минимальная сумма 1 USDT")
                 return
             
-            settings = db.get_settings()
-            commission = settings['commission']
-            commission_amount = int(amount * commission / 100)
-            final_amount = amount - commission_amount
+            user = db.get_user(chat_id)
+            seller = db.get_user(seller_id)
             
-            invoice = crypto.create_invoice(amount, 'USDT', f'Пополнение баланса (+{final_amount} USDT)')
-            if invoice:
-                db.add_invoice(invoice['invoice_id'], chat_id, final_amount, 'USDT', 0, 'deposit')
-                
-                keyboard = types.InlineKeyboardMarkup(row_width=1)
-                keyboard.add(
-                    types.InlineKeyboardButton('💳 Оплатить', url=invoice['pay_url']),
-                    types.InlineKeyboardButton('✅ Проверить', callback_data=f'check_pay_{invoice["invoice_id"]}')
-                )
-                
-                bot.send_message(
-                    chat_id,
-                    f"💳 Пополните баланс на {amount} USDT\n"
-                    f"💳 С учетом комиссии {commission}% вы получите {final_amount} USDT",
-                    reply_markup=keyboard
-                )
-        except:
+            if not user or not seller:
+                bot.send_message(chat_id, "❌ Ошибка: пользователь не найден")
+                return
+            
+            if user['balance'] < amount:
+                bot.send_message(chat_id, "❌ Недостаточно средств на балансе")
+                return
+            
+            sale_id = db.create_sale(chat_id, user['name'], seller_id, seller['name'], amount)
+            
+            seller_keyboard = types.InlineKeyboardMarkup(row_width=2)
+            seller_keyboard.add(
+                types.InlineKeyboardButton('✅ Подтвердить получение', callback_data=f'confirm_sale_{sale_id}'),
+                types.InlineKeyboardButton('⚖️ Спор', callback_data=f'dispute_{sale_id}'
+)
+            
+            bot.send_message(
+                seller_id,
+                f"🆕 <b>Новая сделка!</b>\n\n"
+                f"Номер: #{sale_id}\n"
+                f"Покупатель: @{user['name']}\n"
+                f"Сумма: {amount} USDT\n\n"
+                f"После получения товара нажмите 'Подтвердить получение'",
+                parse_mode="HTML",
+                reply_markup=seller_keyboard
+            )
+            
+            buyer_keyboard = types.InlineKeyboardMarkup(row_width=2)
+            buyer_keyboard.add(
+                types.InlineKeyboardButton('❌ Отменить сделку', callback_data=f'sale_back_{sale_id}'),
+                types.InlineKeyboardButton('⚖️ Спор', callback_data=f'dispute_{sale_id}')
+            )
+            
+            bot.send_message(
+                chat_id,
+                f"✅ Сделка #{sale_id} создана!\n"
+                f"💰 Сумма: {amount} USDT заморожена\n"
+                f"📤 Продавец: @{seller['name']}\n\n"
+                f"Дождитесь получения товара",
+                parse_mode="HTML",
+                reply_markup=buyer_keyboard
+            )
+            
+        except ValueError:
             bot.send_message(chat_id, "❌ Введите число")
+        except Exception as e:
+            bot.send_message(chat_id, f"❌ Ошибка: {str(e)}")
+    
+    # ============================================================
+    # 5. ПОДТВЕРЖДЕНИЕ СДЕЛКИ
+    # ============================================================
+    
+    def confirm_sale(chat_id, sale_id):
+        sale = db.get_sale(sale_id)
+        if not sale:
+            bot.send_message(chat_id, "❌ Сделка не найдена")
+            return
+        
+        if str(chat_id) != sale['user_id2']:
+            bot.send_message(chat_id, "❌ Только продавец может подтвердить сделку")
+            return
+        
+        if sale['status'] == 'completed':
+            bot.send_message(chat_id, "❌ Сделка уже завершена")
+            return
+        
+        if db.complete_sale(sale_id):
+            bot.send_message(
+                sale['user_id'],
+                f"✅ Сделка #{sale_id} завершена!\n"
+                f"💰 Продавец получил {sale['sum']} USDT",
+                reply_markup=menu.main_menu
+            )
+            
+            bot.send_message(
+                chat_id,
+                f"✅ Сделка #{sale_id} завершена!\n"
+                f"💰 Вы получили {sale['sum']} USDT на баланс",
+                reply_markup=menu.main_menu
+            )
+            
+            for admin in config.ADMIN_IDS:
+                bot.send_message(
+                    admin,
+                    f"✅ <b>Сделка #{sale_id} завершена!</b>\n\n"
+                    f"👤 Покупатель: @{sale['name']}\n"
+                    f"👤 Продавец: @{sale['name2']}\n"
+                    f"💰 Сумма: {sale['sum']} USDT",
+                    parse_mode="HTML"
+                )
+    
+    # ============================================================
+    # 6. ОТМЕНА СДЕЛКИ
+    # ============================================================
+    
+    def cancel_sale(chat_id, sale_id):
+        sale = db.get_sale(sale_id)
+        if not sale:
+            bot.send_message(chat_id, "❌ Сделка не найдена")
+            return
+        
+        if db.cancel_sale(sale_id):
+            bot.send_message(
+                sale['user_id2'],
+                f"❌ Сделка #{sale_id} отменена\n"
+                f"💰 Деньги возвращены покупателю",
+                reply_markup=menu.main_menu
+            )
+            
+            bot.send_message(
+                chat_id,
+                f"❌ Сделка #{sale_id} отменена\n"
+                f"💰 Деньги возвращены на баланс",
+                reply_markup=menu.main_menu
+            )
+    
+    # ============================================================
+    # 7. СПОРЫ
+    # ============================================================
+    
+    def open_dispute(chat_id, sale_id):
+        sale = db.get_sale(sale_id)
+        if not sale:
+            bot.send_message(chat_id, "❌ Сделка не найдена")
+            return
+        
+        db.create_dispute(sale_id, sale['user_id'], sale['name'], sale['user_id2'], sale['name2'], sale['sum'])
+        
+        bot.send_message(chat_id, f"⚖️ Спор по сделке #{sale_id} открыт")
+        
+        for admin in config.ADMIN_IDS:
+            bot.send_message(
+                admin,
+                f"⚖️ <b>Новый спор!</b>\n\n"
+                f"Сделка #{sale_id}\n"
+                f"Покупатель: @{sale['name']}\n"
+                f"Продавец: @{sale['name2']}\n"
+                f"Сумма: {sale['sum']} USDT",
+                parse_mode="HTML"
+            )
+    
+    # ============================================================
+    # 8. АДМИН ФУНКЦИИ
+    # ============================================================
     
     def change_balance_by_username(message):
         chat_id = message.chat.id
@@ -446,123 +685,6 @@ def register_all_handlers(bot):
             )
         except:
             bot.send_message(chat_id, "❌ Ошибка! Формат: @username 100", reply_markup=menu.admin_menu)
-    
-    def admin_withdraw_accept(chat_id, user_id, amount):
-        bot.send_message(
-            user_id,
-            f"✅ Ваш вывод {amount} USDT подтвержден администратором!\nСредства будут отправлены на указанный кошелек."
-        )
-        bot.send_message(chat_id, f"✅ Вывод {amount} USDT для пользователя {user_id} подтвержден")
-    
-    def admin_withdraw_reject(chat_id, user_id):
-        bot.send_message(
-            user_id,
-            f"❌ Ваш запрос на вывод отклонен администратором.\nСредства возвращены на баланс."
-        )
-        bot.send_message(chat_id, f"❌ Вывод для пользователя {user_id} отклонен")
-    
-    def check_payment(chat_id, invoice_id):
-        invoice = crypto.check_invoice(invoice_id)
-        if not invoice:
-            bot.send_message(chat_id, "❌ Счет не найден")
-            return
-        
-        if invoice['status'] == 'paid':
-            db.update_invoice_status(invoice_id, 'paid')
-            inv_data = db.get_invoice(invoice_id)
-            
-            if inv_data and inv_data['type'] == 'deal':
-                db.complete_sale(inv_data['deal_id'])
-                bot.send_message(chat_id, f"✅ Сделка завершена!")
-            else:
-                db.update_balance(inv_data['user_id'], inv_data['amount'])
-                bot.send_message(chat_id, f"✅ Баланс пополнен на {inv_data['amount']} USDT")
-        else:
-            bot.send_message(chat_id, f"⏳ Статус: {invoice['status']}")
-    
-    def complete_sale(chat_id, sale_id):
-        sale = db.get_sale(sale_id)
-        if not sale:
-            bot.send_message(chat_id, "❌ Сделка не найдена")
-            return
-        
-        if db.complete_sale(sale_id):
-            bot.send_message(chat_id, f"✅ Сделка #{sale_id} завершена!")
-            bot.send_message(sale['user_id2'], f"✅ Сделка #{sale_id} завершена! Сумма: {sale['sum']} USDT")
-    
-    def cancel_sale(chat_id, sale_id):
-        sale = db.get_sale(sale_id)
-        if not sale:
-            bot.send_message(chat_id, "❌ Сделка не найдена")
-            return
-        
-        if db.cancel_sale(sale_id):
-            bot.send_message(chat_id, f"❌ Сделка #{sale_id} отменена")
-            bot.send_message(sale['user_id'], f"❌ Сделка #{sale_id} отменена. Деньги возвращены")
-    
-    def open_dispute(chat_id, sale_id):
-        sale = db.get_sale(sale_id)
-        if not sale:
-            bot.send_message(chat_id, "❌ Сделка не найдена")
-            return
-        
-        db.create_dispute(sale_id, sale['user_id'], sale['name'], sale['user_id2'], sale['name2'], sale['sum'])
-        bot.send_message(chat_id, f"⚖️ Спор по сделке #{sale_id} открыт")
-        
-        for admin in config.ADMIN_IDS:
-            bot.send_message(
-                admin,
-                f"⚖️ <b>Новый спор!</b>\n\nСделка #{sale_id}\nПокупатель: @{sale['name']}\nПродавец: @{sale['name2']}\nСумма: {sale['sum']} USDT",
-                parse_mode="HTML"
-            )
-    
-    def show_feedback(chat_id, user_id):
-        feedbacks = db.get_feedback(user_id)
-        if not feedbacks:
-            bot.send_message(chat_id, "📝 Отзывов пока нет")
-            return
-        
-        text = "⭐️ <b>Отзывы:</b>\n\n"
-        for fb in feedbacks[:5]:
-            text += f"👤 @{fb['name2']}: {fb['text']}\n"
-        bot.send_message(chat_id, text, parse_mode="HTML")
-    
-    def show_top_donates(chat_id):
-        donates = db.get_top_donates()
-        if not donates:
-            bot.send_message(chat_id, "📊 Пока нет донатов")
-            return
-        
-        text = "🏆 <b>Топ донатеров:</b>\n\n"
-        for i, donate in enumerate(donates, 1):
-            text += f"{i}. {donate['user_id']} - {donate['total']} USDT\n"
-        bot.send_message(chat_id, text, parse_mode="HTML")
-    
-    def process_donate(message):
-        chat_id = message.chat.id
-        if message.text == '❌ Отмена':
-            bot.send_message(chat_id, "❌ Отменено", reply_markup=menu.main_menu)
-            return
-        
-        try:
-            amount = int(message.text)
-            if amount < 1:
-                bot.send_message(chat_id, "❌ Минимальная сумма 1 USDT")
-                return
-            
-            invoice = crypto.create_invoice(amount, 'USDT', 'Донат')
-            if invoice:
-                db.add_invoice(invoice['invoice_id'], chat_id, amount, 'USDT', 0, 'donate')
-                
-                keyboard = types.InlineKeyboardMarkup(row_width=1)
-                keyboard.add(
-                    types.InlineKeyboardButton('💳 Оплатить', url=invoice['pay_url']),
-                    types.InlineKeyboardButton('✅ Проверить', callback_data=f'check_pay_{invoice["invoice_id"]}')
-                )
-                
-                bot.send_message(chat_id, f"🎁 Спасибо за донат {amount} USDT!", reply_markup=keyboard)
-        except:
-            bot.send_message(chat_id, "❌ Введите число")
     
     def process_mailing(message):
         chat_id = message.chat.id
@@ -601,7 +723,7 @@ def register_all_handlers(bot):
             commission = int(message.text)
             if 0 <= commission <= 50:
                 db.update_setting('commission', commission)
-                bot.send_message(chat_id, f"✅ Комиссия: {commission}%", reply_markup=menu.admin_menu)
+                bot.send_message(chat_id, f"✅ Комиссия вывода: {commission}%", reply_markup=menu.admin_menu)
             else:
                 bot.send_message(chat_id, "❌ От 0 до 50")
         except:
@@ -633,5 +755,27 @@ def register_all_handlers(bot):
         
         db.update_post(text, message.text)
         bot.send_message(chat_id, "✅ Пост сохранен!", reply_markup=menu.admin_menu)
+    
+    def show_feedback(chat_id, user_id):
+        feedbacks = db.get_feedback(user_id)
+        if not feedbacks:
+            bot.send_message(chat_id, "📝 Отзывов пока нет")
+            return
+        
+        text = "⭐️ <b>Отзывы:</b>\n\n"
+        for fb in feedbacks[:5]:
+            text += f"👤 @{fb['name2']}: {fb['text']}\n"
+        bot.send_message(chat_id, text, parse_mode="HTML")
+    
+    def show_top_donates(chat_id):
+        donates = db.get_top_donates()
+        if not donates:
+            bot.send_message(chat_id, "📊 Пока нет донатов")
+            return
+        
+        text = "🏆 <b>Топ донатеров:</b>\n\n"
+        for i, donate in enumerate(donates, 1):
+            text += f"{i}. {donate['user_id']} - {donate['total']} USDT\n"
+        bot.send_message(chat_id, text, parse_mode="HTML")
     
     print("✅ Все обработчики зарегистрированы")
